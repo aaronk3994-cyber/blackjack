@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Blackjack</title>
+    <title>Multiplayer Blackjack with Ace Choice</title>
     <style>
         * {
             box-sizing: border-box;
@@ -163,6 +163,15 @@
             display: flex;
             justify-content: center;
             gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .ace-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+            width: 100%;
         }
 
         button {
@@ -175,6 +184,14 @@
             border-radius: 8px;
             cursor: pointer;
             transition: background 0.2s, transform 0.1s;
+        }
+
+        button.ace-btn {
+            background-color: #00bcd4;
+        }
+
+        button.ace-btn:hover:not(:disabled) {
+            background-color: #00838f;
         }
 
         button:hover:not(:disabled) {
@@ -190,6 +207,10 @@
             background-color: #7f8c8d;
             cursor: not-allowed;
             opacity: 0.6;
+        }
+
+        .hidden-controls {
+            display: none !important;
         }
     </style>
 </head>
@@ -223,8 +244,14 @@
     <!-- Player Hands Grid -->
     <div id="players-grid" class="players-grid"></div>
 
-    <!-- Game Action Controls -->
-    <div class="controls">
+    <!-- Ace Selection Panel -->
+    <div id="ace-panel" class="ace-controls hidden-controls">
+        <button class="ace-btn" onclick="chooseAceValue(1)">Count Ace as 1</button>
+        <button class="ace-btn" onclick="chooseAceValue(11)">Count Ace as 11</button>
+    </div>
+
+    <!-- Standard Game Controls -->
+    <div id="standard-controls" class="controls">
         <button id="hit-btn" onclick="hit()" disabled>Hit</button>
         <button id="stand-btn" onclick="stand()" disabled>Stand</button>
     </div>
@@ -247,12 +274,14 @@
     const hitBtn = document.getElementById('hit-btn');
     const standBtn = document.getElementById('stand-btn');
     const dealBtn = document.getElementById('deal-btn');
+    const acePanelEl = document.getElementById('ace-panel');
+    const standardControlsEl = document.getElementById('standard-controls');
 
     function createDeck() {
         deck = [];
         for (let suit of suits) {
             for (let rank of ranks) {
-                deck.push({ suit, rank });
+                deck.push({ suit, rank, chosenValue: null });
             }
         }
         for (let i = deck.length - 1; i > 0; i--) {
@@ -262,26 +291,14 @@
     }
 
     function getCardValue(card) {
+        if (card.chosenValue !== null) return card.chosenValue;
         if (['J', 'Q', 'K'].includes(card.rank)) return 10;
-        if (card.rank === 'A') return 11;
+        if (card.rank === 'A') return 11; // Default fallback
         return parseInt(card.rank);
     }
 
     function calculateScore(hand) {
-        let score = 0;
-        let aces = 0;
-
-        for (let card of hand) {
-            score += getCardValue(card);
-            if (card.rank === 'A') aces++;
-        }
-
-        while (score > 21 && aces > 0) {
-            score -= 10;
-            aces--;
-        }
-
-        return score;
+        return hand.reduce((total, card) => total + getCardValue(card), 0);
     }
 
     function renderCard(card, isHidden = false) {
@@ -361,7 +378,12 @@
         createDeck();
         setupPlayers();
 
+        // Dealer gets automatically scored Ace if needed
         dealerHand = [deck.pop(), deck.pop()];
+        dealerHand.forEach(c => {
+            if (c.rank === 'A') c.chosenValue = 11;
+        });
+
         players.forEach(player => {
             player.hand = [deck.pop(), deck.pop()];
             player.status = '';
@@ -371,25 +393,54 @@
         gamePhase = 'playing';
         activePlayerIndex = 0;
 
-        hitBtn.disabled = false;
-        standBtn.disabled = false;
         dealBtn.disabled = true;
 
-        checkActivePlayerState();
         renderBoard(true);
+        processTurn();
     }
 
-    function checkActivePlayerState() {
+    function processTurn() {
         const currentPlayer = players[activePlayerIndex];
-        const score = calculateScore(currentPlayer.hand);
+        
+        // Find if current player has an unassigned Ace
+        const unassignedAce = currentPlayer.hand.find(card => card.rank === 'A' && card.chosenValue === null);
 
-        if (score === 21) {
-            currentPlayer.status = 'Blackjack!';
-            currentPlayer.isDone = true;
-            nextTurn();
+        if (unassignedAce) {
+            statusEl.textContent = `${currentPlayer.name}: Choose value for your Ace!`;
+            acePanelEl.classList.remove('hidden-controls');
+            standardControlsEl.classList.add('hidden-controls');
         } else {
-            statusEl.textContent = `${currentPlayer.name}'s Turn`;
+            acePanelEl.classList.add('hidden-controls');
+            standardControlsEl.classList.remove('hidden-controls');
+
+            hitBtn.disabled = false;
+            standBtn.disabled = false;
+
+            const score = calculateScore(currentPlayer.hand);
+            if (score === 21) {
+                currentPlayer.status = 'Blackjack / 21!';
+                currentPlayer.isDone = true;
+                nextTurn();
+            } else if (score > 21) {
+                currentPlayer.status = 'Bust!';
+                currentPlayer.isDone = true;
+                nextTurn();
+            } else {
+                statusEl.textContent = `${currentPlayer.name}'s Turn`;
+            }
         }
+    }
+
+    function chooseAceValue(val) {
+        const currentPlayer = players[activePlayerIndex];
+        const unassignedAce = currentPlayer.hand.find(card => card.rank === 'A' && card.chosenValue === null);
+        
+        if (unassignedAce) {
+            unassignedAce.chosenValue = val;
+        }
+
+        renderBoard(true);
+        processTurn();
     }
 
     function hit() {
@@ -398,18 +449,8 @@
         const currentPlayer = players[activePlayerIndex];
         currentPlayer.hand.push(deck.pop());
 
-        const score = calculateScore(currentPlayer.hand);
-        if (score > 21) {
-            currentPlayer.status = 'Bust!';
-            currentPlayer.isDone = true;
-            renderBoard(true);
-            nextTurn();
-        } else if (score === 21) {
-            renderBoard(true);
-            stand();
-        } else {
-            renderBoard(true);
-        }
+        renderBoard(true);
+        processTurn();
     }
 
     function stand() {
@@ -423,8 +464,8 @@
     function nextTurn() {
         activePlayerIndex++;
         if (activePlayerIndex < players.length) {
-            checkActivePlayerState();
             renderBoard(true);
+            processTurn();
         } else {
             playDealerTurn();
         }
@@ -432,14 +473,44 @@
 
     function playDealerTurn() {
         gamePhase = 'ended';
+        acePanelEl.classList.add('hidden-controls');
+        standardControlsEl.classList.remove('hidden-controls');
 
-        // Check if all players busted
+        // Automatic Ace handling for dealer (11 unless it causes bust)
+        const autoScoreDealer = () => {
+            let score = 0;
+            let aces = 0;
+            dealerHand.forEach(c => {
+                if (c.rank === 'A') aces++;
+                else score += getCardValue(c);
+            });
+            score += aces * 11;
+            while (score > 21 && aces > 0) {
+                score -= 10;
+                aces--;
+            }
+            return score;
+        };
+
         const allBusted = players.every(p => calculateScore(p.hand) > 21);
 
         if (!allBusted) {
-            while (calculateScore(dealerHand) < 17) {
-                dealerHand.push(deck.pop());
+            while (autoScoreDealer() < 17) {
+                const nextCard = deck.pop();
+                if (nextCard.rank === 'A') nextCard.chosenValue = 11;
+                dealerHand.push(nextCard);
             }
+        }
+
+        // Assign dealer final score correctly
+        let dScore = autoScoreDealer();
+        dealerHand.forEach(c => {
+            if (c.rank === 'A') c.chosenValue = 11;
+        });
+        if (dScore > 21) {
+            dealerHand.forEach(c => {
+                if (c.rank === 'A') c.chosenValue = 1;
+            });
         }
 
         evaluateWinners();
@@ -476,7 +547,6 @@
         renderBoard(false);
     }
 
-    // Initialize initial UI layout
     setupPlayers();
 </script>
 
