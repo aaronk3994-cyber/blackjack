@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Blackjack with Ace Choice</title>
+    <title>Multiplayer Blackjack with Secret Code</title>
     <style>
         * {
             box-sizing: border-box;
@@ -20,6 +20,11 @@
             align-items: center;
             min-height: 100vh;
             padding: 20px;
+            transition: background-color 0.5s ease;
+        }
+
+        body.gold-mode {
+            background-color: #4a3b00;
         }
 
         .game-container {
@@ -31,6 +36,13 @@
             max-width: 900px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
             text-align: center;
+            transition: background-color 0.5s ease, border-color 0.5s ease;
+        }
+
+        .gold-mode .game-container {
+            background-color: #8a6d1b;
+            border-color: #d4af37;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
         }
 
         h1 {
@@ -48,6 +60,7 @@
             justify-content: center;
             align-items: center;
             gap: 15px;
+            flex-wrap: wrap;
         }
 
         label {
@@ -190,8 +203,12 @@
             background-color: #00bcd4;
         }
 
-        button.ace-btn:hover:not(:disabled) {
-            background-color: #00838f;
+        button.secret-btn {
+            background-color: #9c27b0;
+        }
+
+        button.secret-btn:hover:not(:disabled) {
+            background-color: #7b1fa2;
         }
 
         button:hover:not(:disabled) {
@@ -219,7 +236,7 @@
 <div class="game-container">
     <h1>MULTIPLAYER BLACKJACK</h1>
 
-    <!-- Player Count Selection -->
+    <!-- Player Count & Secret Code Setup -->
     <div class="setup-panel">
         <label for="player-count">Players:</label>
         <select id="player-count" onchange="setupPlayers()">
@@ -229,6 +246,7 @@
             <option value="4">4 Players</option>
         </select>
         <button id="deal-btn" onclick="startNewGame()">Deal Game</button>
+        <button class="secret-btn" onclick="promptSecretCode()">🔑 Enter Code</button>
     </div>
 
     <!-- Dealer Area -->
@@ -265,7 +283,7 @@
     let dealerHand = [];
     let players = [];
     let activePlayerIndex = 0;
-    let gamePhase = 'setup'; // setup, playing, ended
+    let gamePhase = 'setup';
 
     const dealerCardsEl = document.getElementById('dealer-cards');
     const dealerScoreEl = document.getElementById('dealer-score');
@@ -276,6 +294,17 @@
     const dealBtn = document.getElementById('deal-btn');
     const acePanelEl = document.getElementById('ace-panel');
     const standardControlsEl = document.getElementById('standard-controls');
+
+    function promptSecretCode() {
+        const code = prompt("Enter 4-digit code:");
+        if (code === "6767") {
+            document.body.classList.add('gold-mode');
+            alert("🌟 VIP Code Activated! Gold Table Theme Unlocked!");
+            statusEl.textContent = "✨ VIP Gold Mode Active! ✨";
+        } else if (code !== null) {
+            alert("Incorrect code!");
+        }
+    }
 
     function createDeck() {
         deck = [];
@@ -293,7 +322,7 @@
     function getCardValue(card) {
         if (card.chosenValue !== null) return card.chosenValue;
         if (['J', 'Q', 'K'].includes(card.rank)) return 10;
-        if (card.rank === 'A') return 11; // Default fallback
+        if (card.rank === 'A') return 11;
         return parseInt(card.rank);
     }
 
@@ -329,7 +358,6 @@
     }
 
     function renderBoard(hideDealerCard = true) {
-        // Render Dealer
         dealerCardsEl.innerHTML = '';
         if (dealerHand.length > 0) {
             if (hideDealerCard) {
@@ -344,7 +372,6 @@
             dealerScoreEl.textContent = 'Score: -';
         }
 
-        // Render Players
         playersGridEl.innerHTML = '';
         players.forEach((player, index) => {
             const panel = document.createElement('div');
@@ -378,7 +405,6 @@
         createDeck();
         setupPlayers();
 
-        // Dealer gets automatically scored Ace if needed
         dealerHand = [deck.pop(), deck.pop()];
         dealerHand.forEach(c => {
             if (c.rank === 'A') c.chosenValue = 11;
@@ -401,8 +427,6 @@
 
     function processTurn() {
         const currentPlayer = players[activePlayerIndex];
-        
-        // Find if current player has an unassigned Ace
         const unassignedAce = currentPlayer.hand.find(card => card.rank === 'A' && card.chosenValue === null);
 
         if (unassignedAce) {
@@ -476,7 +500,6 @@
         acePanelEl.classList.add('hidden-controls');
         standardControlsEl.classList.remove('hidden-controls');
 
-        // Automatic Ace handling for dealer (11 unless it causes bust)
         const autoScoreDealer = () => {
             let score = 0;
             let aces = 0;
@@ -502,7 +525,6 @@
             }
         }
 
-        // Assign dealer final score correctly
         let dScore = autoScoreDealer();
         dealerHand.forEach(c => {
             if (c.rank === 'A') c.chosenValue = 11;
